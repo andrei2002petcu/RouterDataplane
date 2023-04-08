@@ -60,7 +60,7 @@ void send_icmp(char *buf, int send_interface, int type) {
 	memcpy(send_payload, eth_hdr, sizeof(struct ether_header));
 	memcpy(send_payload + sizeof(struct ether_header), ip_hdr, sizeof(struct iphdr));
 	memcpy(send_payload + sizeof(struct ether_header) + sizeof(struct iphdr), icmp_hdr, sizeof(struct icmphdr));
-	memcpy(ip_hdr + sizeof(struct iphdr) + sizeof(struct icmphdr), ip_hdr + sizeof(struct iphdr), 64);
+	//memcpy(ip_hdr + sizeof(struct iphdr) + sizeof(struct icmphdr), ip_hdr + sizeof(struct iphdr), 64);
 
 	send_to_link(send_interface, send_payload, send_payload_len);
 }
