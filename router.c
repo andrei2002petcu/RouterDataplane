@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 	int rtable_len = read_rtable(argv[1], rtable);
 
 	//arp table
-	struct arp_entry *arptable = malloc(60000 * sizeof(struct arp_entry));
+	struct arp_entry *arptable = malloc(100 * sizeof(struct arp_entry));
 	DIE(arptable == NULL, "arptable memory allocation failed");
 	int arptable_len = 0;
 
@@ -104,7 +104,6 @@ int main(int argc, char *argv[])
 		sending a packet on the link, */
 
 		get_interface_mac(interface, mac);
-
 		printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		printf("DEST: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_hdr->ether_dhost[0], eth_hdr->ether_dhost[1], eth_hdr->ether_dhost[2], eth_hdr->ether_dhost[3], eth_hdr->ether_dhost[4], eth_hdr->ether_dhost[5]);
 		printf("SURSA: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_hdr->ether_shost[0], eth_hdr->ether_shost[1], eth_hdr->ether_shost[2], eth_hdr->ether_shost[3], eth_hdr->ether_shost[4], eth_hdr->ether_shost[5]);
@@ -117,7 +116,7 @@ int main(int argc, char *argv[])
 
 		if(eth_hdr->ether_type == ETHERTYPE_IP) {
 			
-			printf("%x ip\n", ntohs(eth_hdr->ether_type));
+			printf("%x ip\n\n", ntohs(eth_hdr->ether_type));
 		
 			//IPv4 header
 			struct iphdr *ip_hdr = (struct iphdr *)(buf + sizeof(struct ether_header));
@@ -168,7 +167,6 @@ int main(int argc, char *argv[])
 					break;
 				}
 			}
-			printf("hi\n");
 
 			//entry not found in ARP table
 			if(arp_index == -1) {
@@ -202,28 +200,14 @@ int main(int argc, char *argv[])
 				send_to_link(best_route->interface, arp_request, sizeof(struct ether_header) + sizeof(struct arp_header));
 			}
 			else {
-				memcpy(eth_hdr->ether_shost, mac, HLEN);
+				memcpy(eth_hdr->ether_shost, route_mac, HLEN);
 				memcpy(eth_hdr->ether_dhost, arptable[arp_index].mac, HLEN);
 				send_to_link(best_route->interface, buf, len);
 			}
-
-			//////////////////////ARP STATIC//////////////////////////
-			// int idx = -1;
-			// for (int i = 0; i < arptable_len; i++) {
-			// 	if (arptable[i].ip == best->next_hop)
-			// 		idx = i;
-			// 	}	
-
-			// //printf("%d\n", idx);
-			// memcpy(eth_hdr->ether_shost, mac, HLEN);
-			// memcpy(eth_hdr->ether_dhost, arptable[idx].mac, HLEN);
-			// send_to_link(best->interface, buf, len);
-			//////////////////////////////////////////////////////////
-
 		}
 		else if (eth_hdr->ether_type == ETHERTYPE_ARP) {
 		
-			printf("%x arp\n", ntohs(eth_hdr->ether_type));
+			printf("%x arp\n\n", ntohs(eth_hdr->ether_type));
 		
 			//ARP HEADER
 			struct arp_header *arp_hdr = (struct arp_header *)(buf + sizeof(struct ether_header));
@@ -249,7 +233,6 @@ int main(int argc, char *argv[])
 			//RECEIVED ARP REPLY 
 			else if(arp_hdr->op == ARP_REPLY && arp_hdr->tpa == inet_addr(get_interface_ip(interface))) {
 				
-				printf("buna\n");
 				//create new entry for the ARP table
 				struct arp_entry *new_arp_entry = malloc(sizeof(struct arp_entry));
 				memcpy(new_arp_entry->mac, arp_hdr->sha, HLEN);
@@ -261,21 +244,14 @@ int main(int argc, char *argv[])
 
 				//send packets that are waiting in queue
 				while(queue_empty(packet_q) == 0) {
-					printf("ck1\n");
 					char *packet = (char *)queue_deq(packet_q);
 
-					printf("chk2\n");
 					//get packet headers
-					struct ether_header *pkt_eth_hdr = (struct ether_header *)(packet);
-					struct iphdr *pkt_ip_hdr = (struct iphdr *)(packet + sizeof(struct ether_header *));
+					struct ether_header *pkt_eth_hdr = (struct ether_header *) packet;
+					struct iphdr *pkt_ip_hdr = (struct iphdr *)(packet + sizeof(struct ether_header));
 
 					//find route and send the packet
 					struct route_table_entry *best_route = get_route(rtable, rtable_len, pkt_ip_hdr->daddr);
-					printf("%d\n", best_route->next_hop);
-					if(best_route == NULL)
-						printf("nulllll\n");
-
-//////////////////////////////////////////////////////////////////////////////////////
 
 					int arp_index = -1;
 					for (int i = 0; i < arptable_len; i++) {
@@ -284,11 +260,8 @@ int main(int argc, char *argv[])
 							break;
 						}
 					}
-					
-					printf("chk4\n");
-					memcpy(pkt_eth_hdr->ether_shost, mac, HLEN);
 					memcpy(pkt_eth_hdr->ether_dhost, arptable[arp_index].mac, HLEN);
-					send_to_link(best_route->interface, packet, pkt_ip_hdr->tot_len);
+					send_to_link(best_route->interface, packet, len);
 				}
 			}
 		}
