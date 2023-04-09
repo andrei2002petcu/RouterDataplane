@@ -11,18 +11,36 @@
 #define ARP_REPLY htons(2)
 #define HLEN 6 //length of hardware addr (MAC)
 
+//comparator for sorting the rtable by next-hop address firstly and mask secondly
+int rtable_cmp(const void *a, const void *b) {
+	struct route_table_entry *r1 = (struct route_table_entry *) a;
+	struct route_table_entry *r2 = (struct route_table_entry *) b;
+
+	if (ntohl(r1->prefix & r1->mask) == ntohl(r2->prefix & r2->mask))
+		return (ntohl(r1->mask) - ntohl(r2->mask));
+	else 
+		return (ntohl(r1->prefix & r1->mask) - ntohl(r2->prefix & r2->mask));
+}
+
+//LPM algorithm using binary search to find the best route
 struct route_table_entry *get_route(struct route_table_entry *rtable, int rtable_len, uint32_t d_addr) {
-	uint32_t index = -1;
-	for(int i = 0; i < rtable_len; i++)
-		if((d_addr & rtable[i].mask) == rtable[i].prefix) {
-			if(index == -1)
-				index = i;
-			else if(ntohl(rtable[index].mask) < ntohl(rtable[i].mask))
-				index = i;
+	int left = 0, right = rtable_len - 1, mid;
+	struct route_table_entry *best_route = NULL;
+
+	while(right - left >= 0) {
+		mid = (left + right) / 2;
+		if (ntohl(rtable[mid].prefix & rtable[mid].mask) < ntohl(d_addr & rtable[mid].mask))
+			left = mid + 1;
+		else if (ntohl(rtable[mid].prefix & rtable[mid].mask) > ntohl(d_addr & rtable[mid].mask))
+			right = mid - 1;
+		//if we find a match we will continue the binary search for the right part of the rtable
+		//in order to find a match with a bigger mask
+		else {
+			best_route = rtable + mid;
+			left = mid + 1;
 		}
-	if(index == -1)
-		return NULL;
-	else return &rtable[index];
+	}
+	return best_route;
 }
 
 void send_icmp(char *buf, int send_interface, int type) {
@@ -73,6 +91,7 @@ int main(int argc, char *argv[])
 	struct route_table_entry *rtable = malloc(sizeof(struct route_table_entry) * 100000);
 	DIE(rtable == NULL, "rtable memory allocation failed");
 	int rtable_len = read_rtable(argv[1], rtable);
+	qsort(rtable, rtable_len, sizeof(struct route_table_entry), rtable_cmp);
 
 	//arp table
 	struct arp_entry *arptable = malloc(100 * sizeof(struct arp_entry));
