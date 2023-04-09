@@ -11,7 +11,7 @@
 #define ARP_REPLY htons(2)
 #define HLEN 6 //length of hardware addr (MAC)
 
-//comparator for sorting the rtable by next-hop address firstly and mask secondly
+//comparator for sorting the rtable by (prefix & mask) firstly and mask secondly
 int rtable_cmp(const void *a, const void *b) {
 	struct route_table_entry *r1 = (struct route_table_entry *) a;
 	struct route_table_entry *r2 = (struct route_table_entry *) b;
