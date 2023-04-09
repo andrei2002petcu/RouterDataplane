@@ -16,7 +16,7 @@ functia 'send_icmp' cu type-ul 0 si se trece la urmatorul pachet.
 'send_icmp' cu type-ul 11. In caz contrar se decrementeaza TTL si se face
 update la checksum.
 - Obtinem ruta pachetului apeland 'get_route'. Daca nu s-a putut gasi o ruta,
-va apela functia 'send_icmp' cu type-ul 3. Altfel, verificam daca IP-ul se
+se va apela functia 'send_icmp' cu type-ul 3. Altfel, verificam daca IP-ul se
 regaseste in tabela ARP a router-ului. Daca da, se va trimite pachetul catre
 urmatorul hop din ruta. In caz contrar, pachetul este pus in coada si se vor 
 completa ETHER_HDR si ARP_HDR pentru a trimite un ARP request.
@@ -26,8 +26,8 @@ completa ETHER_HDR si ARP_HDR pentru a trimite un ARP request.
 Pentru LPM eficient am folosit cautare binara. Initial se va sorta cu 'qsort'
 RTABLE, primar dupa (prefix & mask), secundar dupa mask, in ordine crescatoare.
 Se efectueaza binary search pe RTABLE ('get_route'), iar la fiecare match, vom 
-retine intrarea gasita, insa continuam cautarea in partea dreapta a 
-RTABLE-ului,cu scopul de a se gasi un match cu o masca mai mare.
+retine intrarea gasita, insa continuam cautarea in partea dreapta a RTABLE-ului
+cu scopul de a se gasi un match cu o masca mai mare.
 
 ########################## TASK 3 - Protocolul ARP ############################
 
@@ -35,7 +35,7 @@ Pentru ARP exista 2 variante posibile.
 - Pachetul este un REQUEST pentru MAC router-ului. Se vor modifica ETHER_HDR si
 ARP_HDR corespunzator pentru a trimite un reply cu IP-ul router-ului.
 - Pachetul este un REPLY, caz in care se va adauga noua adresa IP in tablea ARP
-si se vor trimitele pachetele ce asteptau in coada.
+si se vor trimite pachetele ce asteptau in coada.
 
 ######################### TASK 4 - Protocolul ICMP ############################
 
