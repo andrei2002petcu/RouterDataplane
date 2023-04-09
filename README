@@ -1,0 +1,51 @@
+###############################################################################
+########################### README - Tema_1 PCOM ##############################
+###############################################################################
+
+Dupa primirea pachetului, se extrage MAC-ul interfetei si ETHER HEADER-ul
+pachetului primit pentru a verifica daca destinatia este corecta. Programul se
+imparte apoi in 2 cazuri: cazul ETHERTYPE si cazul ARPTYPE.
+
+##################### TASK 1 - Procesul de dirijare ###########################
+
+Se va extrage IP HEADER-ul pachetului si se urmeaza pasii descrisi in cerinta.
+- Daca pachetul este un ICMP ECHO REQUEST, se va trimite un reply apeland 
+functia 'send_icmp' cu type-ul 0 si se trece la urmatorul pachet.
+- Se verifica integritatea pachetului (recalculam checksum-ul).
+- Se verifica TTL. In cazul in care acesta a expirat se va apela functia 
+'send_icmp' cu type-ul 11. In caz contrar se decrementeaza TTL si se face
+update la checksum.
+- Obtinem ruta pachetului apeland 'get_route'. Daca nu s-a putut gasi o ruta,
+va apela functia 'send_icmp' cu type-ul 3. Altfel, verificam daca IP-ul se
+regaseste in tabela ARP a router-ului. Daca da, se va trimite pachetul catre
+urmatorul hop din ruta. In caz contrar, pachetul este pus in coada si se vor 
+completa ETHER_HDR si ARP_HDR pentru a trimite un ARP request.
+
+################### TASK 2 - Longest Prefix Match eficient ####################
+
+Pentru LPM eficient am folosit cautare binara. Initial se va sorta cu 'qsort'
+RTABLE, primar dupa (prefix & mask), secundar dupa mask, in ordine crescatoare.
+Se efectueaza binary search pe RTABLE ('get_route'), iar la fiecare match, vom 
+retine intrarea gasita, insa continuam cautarea in partea dreapta a 
+RTABLE-ului,cu scopul de a se gasi un match cu o masca mai mare.
+
+########################## TASK 3 - Protocolul ARP ############################
+
+Pentru ARP exista 2 variante posibile.
+- Pachetul este un REQUEST pentru MAC router-ului. Se vor modifica ETHER_HDR si
+ARP_HDR corespunzator pentru a trimite un reply cu IP-ul router-ului.
+- Pachetul este un REPLY, caz in care se va adauga noua adresa IP in tablea ARP
+si se vor trimitele pachetele ce asteptau in coada.
+
+######################### TASK 4 - Protocolul ICMP ############################
+
+In cazul in care este apelata functia 'send_icmp', se vor completa ETH_HDR, 
+IP_HDR si ICMP_HDR corespunzator pentru a putea trimite pachetul inapoi catre
+sursa cu type-ul corespunzator in functie de caz (Destination unreachable,
+Time exceeded sau Echo reply). HEADER-ele se vor copia intr-un nou string ce va
+reprezenta payload-ul packetului de trimis.
+
+###############################################################################
+Facultatea de Automatica si Calculatoare - Anul 2 2022-2023 - Grupa 322CCa
+PETCU Andrei - PCOM - TEMA 1
+###############################################################################
