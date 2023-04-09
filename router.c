@@ -28,16 +28,16 @@ struct route_table_entry *get_route(struct route_table_entry *rtable, int rtable
 void send_icmp(char *buf, int send_interface, int type) {
 	
 	char send_payload[MAX_PACKET_LEN];
-	int send_payload_len = sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct icmphdr) + 64;
+	int send_payload_len = sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct icmphdr);
 	
-	//ETH HEADER UPDATE
+	//update ETH HEADER
 	struct ether_header *eth_hdr = (struct ether_header *) buf;
 	uint8_t aux_mac[HLEN] = {0};
 	memcpy(aux_mac, eth_hdr->ether_dhost, HLEN);
 	memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, HLEN);
 	memcpy(eth_hdr->ether_shost, aux_mac, HLEN);
 
-	//IP HEADER UPDATE
+	//update IP HEADER
 	struct iphdr *ip_hdr = (struct iphdr *)(buf + sizeof(struct ether_header));
 	uint32_t aux_ip = ip_hdr->daddr;
 	ip_hdr->daddr = ip_hdr->saddr;
@@ -48,7 +48,7 @@ void send_icmp(char *buf, int send_interface, int type) {
 	ip_hdr->check = htons(checksum((u_int16_t *)ip_hdr, sizeof(struct iphdr)));
 	ip_hdr->protocol = 1;
 
-	//ICMP HEADER UPDATE
+	//update ICMP HEADER
 	struct icmphdr *icmp_hdr = (struct icmphdr *)(buf + sizeof(struct ether_header) + sizeof(struct iphdr));
 	icmp_hdr->type = type;
 	icmp_hdr->code = 0;
@@ -56,12 +56,12 @@ void send_icmp(char *buf, int send_interface, int type) {
 	icmp_hdr->checksum = htons(checksum((u_int16_t *)icmp_hdr, sizeof(struct icmphdr)));
 
 
-	//ASSAMBLE PACKAGE
+	//assamble the package
 	memcpy(send_payload, eth_hdr, sizeof(struct ether_header));
 	memcpy(send_payload + sizeof(struct ether_header), ip_hdr, sizeof(struct iphdr));
 	memcpy(send_payload + sizeof(struct ether_header) + sizeof(struct iphdr), icmp_hdr, sizeof(struct icmphdr));
-	//memcpy(ip_hdr + sizeof(struct iphdr) + sizeof(struct icmphdr), ip_hdr + sizeof(struct iphdr), 64);
 
+	//send the package back
 	send_to_link(send_interface, send_payload, send_payload_len);
 }
 
@@ -104,24 +104,24 @@ int main(int argc, char *argv[])
 		sending a packet on the link, */
 
 		get_interface_mac(interface, mac);
-		printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-		printf("DEST: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_hdr->ether_dhost[0], eth_hdr->ether_dhost[1], eth_hdr->ether_dhost[2], eth_hdr->ether_dhost[3], eth_hdr->ether_dhost[4], eth_hdr->ether_dhost[5]);
-		printf("SURSA: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_hdr->ether_shost[0], eth_hdr->ether_shost[1], eth_hdr->ether_shost[2], eth_hdr->ether_shost[3], eth_hdr->ether_shost[4], eth_hdr->ether_shost[5]);
+		printf("DESTINATION: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_hdr->ether_dhost[0], eth_hdr->ether_dhost[1], eth_hdr->ether_dhost[2], eth_hdr->ether_dhost[3], eth_hdr->ether_dhost[4], eth_hdr->ether_dhost[5]);
+		printf("SOURCE: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_hdr->ether_shost[0], eth_hdr->ether_shost[1], eth_hdr->ether_shost[2], eth_hdr->ether_shost[3], eth_hdr->ether_shost[4], eth_hdr->ether_shost[5]);
 
-		//CHECK DESTINATION, IF DESTINATION IS WRONG -> DROP PACKAGE
+		//check destination, if destination is wrong -> drop the package
 		if(memcmp(eth_hdr->ether_dhost, mac, HLEN) != 0 && memcmp(eth_hdr->ether_dhost, broadcast_mac, HLEN) != 0) {
-			printf("skip\n");
+			printf("Wrong destination skipping.......\n\n");
 			continue;
 		}
 
+		//check package type (IP/ARP)
 		if(eth_hdr->ether_type == ETHERTYPE_IP) {
 			
-			printf("%x ip\n\n", ntohs(eth_hdr->ether_type));
+			printf("TYPE: %d ip\n\n", ntohs(eth_hdr->ether_type));
 		
-			//IPv4 header
+			//get the IPv4 header
 			struct iphdr *ip_hdr = (struct iphdr *)(buf + sizeof(struct ether_header));
 			
-			//ICMP ECHO REQUEST
+			//if package is ICMP ECHO REQUEST -> reply
 			if(ip_hdr->daddr == inet_addr(get_interface_ip(interface)) && ip_hdr->protocol == 1) {
 				struct icmphdr *icmp_hdr = (struct icmphdr *)(buf + sizeof(struct ether_header) + sizeof(struct iphdr));
 				if(icmp_hdr->type == 8) {
@@ -130,15 +130,16 @@ int main(int argc, char *argv[])
 				}
 			}
 
-			//checksum check
+			//check package integrity and drop the package if corrupted
 			uint16_t initial_checksum = ip_hdr->check;
 			ip_hdr->check = 0;
 			if(ntohs(initial_checksum) != checksum((u_int16_t *)ip_hdr, sizeof(struct iphdr))) {
 				printf("checksum err\n");
-				continue; //wrong checksum => drop the package
+				continue;
 			}
 
-			//TTL check and update
+			//TTL check, if TTL expired -> send ICMP reply and drop the package
+			//else update TTL and checksum
 			if(ip_hdr->ttl < 2) {
 				send_icmp(buf, interface, 11);
 				printf("time excedeed\n");
@@ -150,7 +151,8 @@ int main(int argc, char *argv[])
 				ip_hdr->check = htons(checksum((u_int16_t *)ip_hdr, sizeof(struct iphdr)));
 			}
 
-			//find best route to send the packet
+			//find the best route to send the package
+			//if route is not found, send ICMP reply and drop the package
 			struct route_table_entry *best_route = get_route(rtable, rtable_len, ip_hdr->daddr);
 			if(best_route == NULL) {
 				send_icmp(buf, interface, 3);
@@ -159,7 +161,7 @@ int main(int argc, char *argv[])
 			uint8_t route_mac[HLEN];
 			get_interface_mac(best_route->interface, route_mac);
 
-			//find entry in ARP table
+			//check ARP table to find route's IP
 			int arp_index = -1;
 			for (int i = 0; i < arptable_len; i++) {
 				if (arptable[i].ip == best_route->next_hop) {
@@ -171,8 +173,9 @@ int main(int argc, char *argv[])
 			//entry not found in ARP table
 			if(arp_index == -1) {
 				//queue the packet and send ARP request
-				char *buf_copy = malloc(MAX_PACKET_LEN);
-				memcpy(buf_copy, buf, len);
+				char *buf_copy = malloc(MAX_PACKET_LEN + sizeof(size_t));
+				memcpy(buf_copy, &len, sizeof(size_t));
+				memcpy(buf_copy + sizeof(size_t), buf, len);
 				queue_enq(packet_q, buf_copy);
 				
 				//ETHER HEADER
@@ -199,38 +202,40 @@ int main(int argc, char *argv[])
 				memcpy(arp_request + sizeof(struct ether_header), arp_hdr, sizeof(struct arp_header));
 				send_to_link(best_route->interface, arp_request, sizeof(struct ether_header) + sizeof(struct arp_header));
 			}
+			//entry found in ARP table -> send the packet
 			else {
 				memcpy(eth_hdr->ether_shost, route_mac, HLEN);
 				memcpy(eth_hdr->ether_dhost, arptable[arp_index].mac, HLEN);
 				send_to_link(best_route->interface, buf, len);
 			}
 		}
+		//packet is ARP type
 		else if (eth_hdr->ether_type == ETHERTYPE_ARP) {
 		
-			printf("%x arp\n\n", ntohs(eth_hdr->ether_type));
+			printf("TYPE: %d arp\n\n", ntohs(eth_hdr->ether_type));
 		
-			//ARP HEADER
+			//get ARP HEADER
 			struct arp_header *arp_hdr = (struct arp_header *)(buf + sizeof(struct ether_header));
 		
-			//RECEIVED ARP REQUEST FOR THE ROUTER MAC ADDR
+			//packet is ARP REQUEST for router's MAC -> reply
 			if(arp_hdr->op == ARP_REQUEST && arp_hdr->tpa == inet_addr(get_interface_ip(interface))) {
 
-				//ETH HEADER UPDATE
+				//update ETH HEADER
 				memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, HLEN);
 				memcpy(eth_hdr->ether_shost, mac, HLEN);
 
-				//ARP HEADER UPDATE
+				//update ARP HEADER
 				memcpy(arp_hdr->tha, arp_hdr->sha, HLEN);
 				memcpy(arp_hdr->sha, mac, HLEN);
-
 				u_int32_t aux_ip = arp_hdr->tpa;
 				arp_hdr->tpa = arp_hdr->spa;
 				arp_hdr->spa = aux_ip;
-
 				arp_hdr->op = ARP_REPLY;
+				
+				//send back the reply
 				send_to_link(interface, buf, len);
 			}
-			//RECEIVED ARP REPLY 
+			//packet is ARP REPLY -> new entry in ARP table 
 			else if(arp_hdr->op == ARP_REPLY && arp_hdr->tpa == inet_addr(get_interface_ip(interface))) {
 				
 				//create new entry for the ARP table
@@ -244,11 +249,17 @@ int main(int argc, char *argv[])
 
 				//send packets that are waiting in queue
 				while(queue_empty(packet_q) == 0) {
+					
+					//get packet length and payload from queue
 					char *packet = (char *)queue_deq(packet_q);
+					size_t payload_len;
+					char payload[MAX_PACKET_LEN];
+					memcpy(&payload_len, packet, sizeof(size_t));
+					memcpy(payload, packet + sizeof(size_t), payload_len);
 
 					//get packet headers
-					struct ether_header *pkt_eth_hdr = (struct ether_header *) packet;
-					struct iphdr *pkt_ip_hdr = (struct iphdr *)(packet + sizeof(struct ether_header));
+					struct ether_header *pkt_eth_hdr = (struct ether_header *) payload;
+					struct iphdr *pkt_ip_hdr = (struct iphdr *)(payload + sizeof(struct ether_header));
 
 					//find route and send the packet
 					struct route_table_entry *best_route = get_route(rtable, rtable_len, pkt_ip_hdr->daddr);
@@ -261,10 +272,11 @@ int main(int argc, char *argv[])
 						}
 					}
 					memcpy(pkt_eth_hdr->ether_dhost, arptable[arp_index].mac, HLEN);
-					send_to_link(best_route->interface, packet, len);
+					send_to_link(best_route->interface, payload, payload_len);
 				}
 			}
 		}
-		else printf("wrong\n");
+		//packet type is unknown
+		else printf("TYPE not supported\n\n");
 	}
 }
